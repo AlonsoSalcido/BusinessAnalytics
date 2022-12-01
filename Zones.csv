@@ -1,0 +1,10 @@
+﻿Zone Number,Side,Zone
+1,L,Upper left corner
+2,C,Upper center
+3,R,Upper right corner
+4,L,Middle left area
+5,C,Middle center area
+6,R,Middle right area
+7,L,Bottom left corner
+8,C,Bottom center zone
+9,R,Bottom right corner
