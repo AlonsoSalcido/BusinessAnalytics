@@ -30,18 +30,40 @@ library(varImp)
 library(pROC)
 library(mlbench)
 library(caret)
+library(vctrs)
 
 ```
 
 Load Data
 ```{r}
-gk<- read.csv('https://raw.githubusercontent.com/AlonsoSalcido/BusinessAnalytics/main/GK.csv')
-kicker<- read.csv('https://raw.githubusercontent.com/AlonsoSalcido/BusinessAnalytics/main/Kicker.csv')
-shootouts<- read.csv('https://raw.githubusercontent.com/AlonsoSalcido/BusinessAnalytics/main/WorldCupShootouts.csv')
-zones<- read.csv('https://raw.githubusercontent.com/AlonsoSalcido/BusinessAnalytics/main/Zones.csv')
+gk<- read.csv('https://raw.githubusercontent.com/AlonsoSalcido/BusinessAnalytics/main/GK.csv', fileEncoding="UTF-8-BOM")
+kicker<- read.csv('https://raw.githubusercontent.com/AlonsoSalcido/BusinessAnalytics/main/Kicker.csv', fileEncoding="UTF-8-BOM")
+shootouts<- read.csv('https://raw.githubusercontent.com/AlonsoSalcido/BusinessAnalytics/main/WorldCupShootouts.csv', fileEncoding="UTF-8-BOM")
+zones<- read.csv('https://raw.githubusercontent.com/AlonsoSalcido/BusinessAnalytics/main/Zones.csv', fileEncoding="UTF-8-BOM")
 ```
 
 
+```{r}
+df<- as.data.frame(shootouts[shootouts$Goal==1,])
+
+winner<- df %>%
+      group_by(Game_id, Team) %>%
+      summarize(Goal = n())
+
+winner<- winner %>%
+        group_by(Game_id) %>%
+        filter(Goal == max(Goal, na.rm=TRUE))
+
+winner<- as.data.frame(winner[c(1,2)])
+
+df$winner<- ifelse(df$Game_id==winner$Game_id & df$Team==winner$Team, "Yes", "No")
+
+
+# df$First<- ifelse(df$Penalty_Number==1,"Yes","No")
+# First<- df[c(1,2,10)]
+
+
+```
 
 Shootout Goals
 ```{r}
@@ -126,6 +148,7 @@ ggplot(table, aes(x, y))+
         axis.ticks.y=element_blank()  #remove y axis ticks
         )
 ```
+
 ```{r}
 df<- shootouts[shootouts$Goal==1,]
 pks_total<- sum(!is.na(df$Zone))
@@ -148,6 +171,7 @@ ggplot(table, aes(x, y))+
         axis.ticks.y=element_blank()  #remove y axis ticks
         )
 ```
+
 ```{r}
 par(mfrow=c(2,2))
 df<- shootouts[shootouts$Foot=="R",]
@@ -242,4 +266,3 @@ fit <- train(Goal ~ .,
              method = 'knn')
 
 ```
-
