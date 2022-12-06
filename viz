@@ -1,0 +1,245 @@
+---
+title: "BusinessAnalytics"
+author: "Salcido"
+date: '2022-12-01'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(shiny)
+library(janitor)
+library(dplyr)
+library(DT)
+library(stringr)
+library(naniar)
+library(tibble)
+library(sass)
+library(ggplot2)
+library(foreign) # for importing the Stata v12 dataset
+library(dplyr)
+library(tidyverse) # has drop_na() function
+library(ggplot2)
+library(scales) # percent function
+library(randomForest)
+library(varImp)
+library(pROC)
+library(mlbench)
+library(caret)
+
+```
+
+Load Data
+```{r}
+gk<- read.csv('https://raw.githubusercontent.com/AlonsoSalcido/BusinessAnalytics/main/GK.csv')
+kicker<- read.csv('https://raw.githubusercontent.com/AlonsoSalcido/BusinessAnalytics/main/Kicker.csv')
+shootouts<- read.csv('https://raw.githubusercontent.com/AlonsoSalcido/BusinessAnalytics/main/WorldCupShootouts.csv')
+zones<- read.csv('https://raw.githubusercontent.com/AlonsoSalcido/BusinessAnalytics/main/Zones.csv')
+```
+
+
+
+Shootout Goals
+```{r}
+dims = dim(shootouts %>% drop_na(Goal))
+results = shootouts %>% drop_na(Goal) %>% # drop missing values by Goal variable
+    group_by(Goal) %>%  # specify categorical variable
+    summarize(Frequency = n()) %>% # return counts / frequencies
+    mutate(Percent = paste0(round(Frequency / dims[1] * 100, 2), "%")) # percentages
+results$Goal<- gsub(0, "No", results$Goal)
+results$Goal<- gsub(1, "Yes", results$Goal)
+
+ggplot(results, aes(x = "", y = Frequency, fill = Goal)) +
+    geom_col(position = "stack", orientation = "x") + # this plots a stacked bar chart
+     coord_polar(theta = "y") + 
+ theme_void() + # these theme removes the lines around the chart and the grey background
+    geom_text(aes(label = percent(Frequency/dims[1])), position = position_stack(vjust=0.5))+
+  ggtitle("Percentage of Penalties Scored")+
+  scale_fill_manual(values=c("#DEDEDE", "#029645"))
+```
+Shots on Target
+```{r}
+dims = dim(shootouts %>% drop_na(Goal))
+results = shootouts %>% drop_na(Goal) %>% # drop missing values by Goal variable
+    group_by(OnTarget) %>%  # specify categorical variable
+    summarize(Frequency = n()) %>% # return counts / frequencies
+    mutate(Percent = paste0(round(Frequency / dims[1] * 100, 2), "%")) # percentages
+
+results$OnTarget=as.factor(results$OnTarget)
+ggplot(results, aes(x = "", y = Frequency, fill = OnTarget)) +
+    geom_col(position = "stack", orientation = "x") + # this plots a stacked bar chart
+     coord_polar(theta = "y") + 
+ theme_void() + # these theme removes the lines around the chart and the grey background
+    geom_text(aes(label = percent(Frequency/dims[1])), position = position_stack(vjust=0.5))+
+  ggtitle("Shots on Target")+
+  scale_fill_manual(values=c("#DEDEDE", "#029645"))
+```
+
+
+```{r}
+data<- merge(x=shootouts, y=zones, by.x="Zone", by.y="Zone.Number")
+data<-data[c(2,5,7,10)]
+data$correctlyGuessedSide<- ifelse(data$Keeper==data$Side,"yes","no")
+data <- data[data$correctlyGuessedSide=="yes",]
+
+
+dims = dim(data %>% drop_na(Goal))
+results = data %>% drop_na(Goal) %>% # drop missing values by Goal variable
+    group_by(Goal) %>%  # specify categorical variable
+    summarize(Frequency = n()) %>% # return counts / frequencies
+    mutate(Percent = paste0(round(Frequency / dims[1] * 100, 2), "%")) # percentages
+results$Goal<- gsub(0, "No", results$Goal)
+results$Goal<- gsub(1, "Yes", results$Goal)
+
+ggplot(results, aes(x = "", y = Frequency, fill = Goal)) +
+    geom_col(position = "stack", orientation = "x") + # this plots a stacked bar chart
+     coord_polar(theta = "y") + 
+ theme_void() + # these theme removes the lines around the chart and the grey background
+    geom_text(aes(label = percent(Frequency/dims[1])), position = position_stack(vjust=0.5))+
+  ggtitle("Goalie and Ball Direction Coincide")+
+  scale_fill_manual(values=c("#DEDEDE", "#029645"))
+```
+
+
+
+```{r}
+pks_total<- sum(!is.na(shootouts$Zone))
+x <- c("col1", "col2","col3")
+y <- c("row3","row3","row3", "row2", "row2", "row2", "row1","row1","row1")
+third_column <- table(shootouts[, 3])
+table <- data.frame(x, y, third_column)
+table$percent<- table$Freq/pks_total
+
+ggplot(table, aes(x, y))+
+  geom_tile(aes(fill = percent))+
+  ggtitle("Total Shots Heat Map")+
+  scale_fill_gradient(name = "Percentage",
+                      low = "#FFFFFF",
+                      high = "#029645")+
+  theme(axis.text.x=element_blank(), #remove x axis labels
+        axis.ticks.x=element_blank(), #remove x axis ticks
+        axis.text.y=element_blank(),  #remove y axis labels
+        axis.ticks.y=element_blank()  #remove y axis ticks
+        )
+```
+```{r}
+df<- shootouts[shootouts$Goal==1,]
+pks_total<- sum(!is.na(df$Zone))
+
+x <- c("col1", "col2","col3")
+y <- c("row3","row3","row3", "row2", "row2", "row2", "row1","row1","row1")
+third_column <- table(df[, 3])
+table <- data.frame(x, y, third_column)
+table$percent<- table$Freq/pks_total
+
+ggplot(table, aes(x, y))+
+  geom_tile(aes(fill = percent))+
+  ggtitle("Goals Heatmap")+
+  scale_fill_gradient(name = "Percentage",
+                      low = "#FFFFFF",
+                      high = "#029645")+
+  theme(axis.text.x=element_blank(), #remove x axis labels
+        axis.ticks.x=element_blank(), #remove x axis ticks
+        axis.text.y=element_blank(),  #remove y axis labels
+        axis.ticks.y=element_blank()  #remove y axis ticks
+        )
+```
+```{r}
+par(mfrow=c(2,2))
+df<- shootouts[shootouts$Foot=="R",]
+pks_total<- sum(!is.na(df$Zone))
+
+x <- c("col1", "col2","col3")
+y <- c("row3","row3","row3", "row2", "row2", "row2", "row1","row1","row1")
+third_column <- table(df[, 3])
+table <- data.frame(x, y, third_column)
+table$percent<- table$Freq/pks_total
+
+ggplot(table, aes(x, y))+
+  geom_tile(aes(fill = percent))+
+  ggtitle("Right Footer's Heatmap")+
+  scale_fill_gradient(name = "Percentage",
+                      low = "#FFFFFF",
+                      high = "#029645")+
+  theme(axis.text.x=element_blank(), #remove x axis labels
+        axis.ticks.x=element_blank(), #remove x axis ticks
+        axis.text.y=element_blank(),  #remove y axis labels
+        axis.ticks.y=element_blank()  #remove y axis ticks
+        )
+
+df<- shootouts[shootouts$Foot=="L",]
+pks_total<- sum(!is.na(df$Zone))
+
+x <- c("col1", "col2","col3")
+y <- c("row3","row3","row3", "row2", "row2", "row2", "row1","row1","row1")
+third_column <- table(df[, 3])
+table <- data.frame(x, y, third_column)
+table$percent<- table$Freq/pks_total
+
+ggplot(table, aes(x, y))+
+  geom_tile(aes(fill = percent))+
+  ggtitle("Left Footer's Heatmap")+
+  scale_fill_gradient(name = "Percentage",
+                      low = "#FFFFFF",
+                      high = "#029645")+
+  theme(axis.text.x=element_blank(), #remove x axis labels
+        axis.ticks.x=element_blank(), #remove x axis ticks
+        axis.text.y=element_blank(),  #remove y axis labels
+        axis.ticks.y=element_blank()  #remove y axis ticks
+        )
+```
+```{r}
+one.way <- aov(Zone ~ Foot, data = shootouts)
+
+summary(one.way)
+
+
+interaction <- aov(Zone ~ Foot*Elimination, data = shootouts)
+
+summary(interaction)
+```
+
+```{r}
+df<- shootouts[shootouts$OnTarget==0,]
+pks_total<- sum(!is.na(df$Zone))
+
+x <- c("col1", "col2","col3")
+y <- c("row3","row3","row3", "row2", "row2", "row2", "row1","row1","row1")
+third_column <- table(df[, 3])
+table <- data.frame(x, y, third_column)
+table$percent<- table$Freq/pks_total
+
+ggplot(table, aes(x, y))+
+  geom_tile(aes(fill = percent))+
+  ggtitle("Goals Heatmap")+
+  scale_fill_gradient(name = "Percentage",
+                      low = "#FFFFFF",
+                      high = "#029645")+
+  theme(axis.text.x=element_blank(), #remove x axis labels
+        axis.ticks.x=element_blank(), #remove x axis ticks
+        axis.text.y=element_blank(),  #remove y axis labels
+        axis.ticks.y=element_blank()  #remove y axis ticks
+        )
+```
+
+```{r}
+shootouts$Zone<- as.character(shootouts$Zone)
+df<- drop_na(shootouts)
+
+regressor <- randomForest(formula = Zone ~ ., data = df, importance=TRUE) # fit the random forest with default parameter
+varImp(regressor) # get variable importance, based on mean decrease in accuracy
+
+```
+
+```{r}
+df$Zone<- as.factor(df$Zone)
+fit <- train(Goal ~ .,
+             data = df,
+             method = 'knn')
+
+```
+
