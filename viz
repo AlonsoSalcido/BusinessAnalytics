@@ -41,33 +41,57 @@ kicker<- read.csv('https://raw.githubusercontent.com/AlonsoSalcido/BusinessAnaly
 shootouts<- read.csv('https://raw.githubusercontent.com/AlonsoSalcido/BusinessAnalytics/main/WorldCupShootouts.csv', fileEncoding="UTF-8-BOM")
 zones<- read.csv('https://raw.githubusercontent.com/AlonsoSalcido/BusinessAnalytics/main/Zones.csv', fileEncoding="UTF-8-BOM")
 ```
+Clean Dataset
+```{r}
+shootouts$Zone<- as.factor(shootouts$Zone)
+shootouts$Foot<- as.factor(shootouts$Foot)
+shootouts$Keeper<- as.factor(shootouts$Keeper)
+shootouts$OnTarget<- as.factor(shootouts$OnTarget)
+shootouts$Elimination<- as.factor(shootouts$Elimination)
+shootouts$Goal<- as.factor(shootouts$Goal)
+```
 
 
 ```{r}
+# Find Winner of Each Game
 df<- as.data.frame(shootouts[shootouts$Goal==1,])
-
 winner<- df %>%
       group_by(Game_id, Team) %>%
       summarize(Goal = n())
-
 winner<- winner %>%
         group_by(Game_id) %>%
         filter(Goal == max(Goal, na.rm=TRUE))
+winner$winner<- winner$Team
+winner<- as.data.frame(winner[c(1,2,4)])
 
-winner<- as.data.frame(winner[c(1,2)])
+# Findout Which Team Shot First
+first<- as.data.frame(shootouts[shootouts$Penalty_Number==1,])
+first$first_shooter<- first$Team
+first<- first[c(1,10)]
 
-df$winner<- ifelse(df$Game_id==winner$Game_id & df$Team==winner$Team, "Yes", "No")
+winner<-merge(x = winner, y = first, by = "Game_id", all = TRUE)
 
+winner$winnerPos<- ifelse(winner$winner==winner$first_shooter, "first","second")
+dims = dim(winner %>% drop_na(winner))
 
-# df$First<- ifelse(df$Penalty_Number==1,"Yes","No")
-# First<- df[c(1,2,10)]
+results = winner %>% drop_na(winner) %>% # drop missing values
+    group_by(winnerPos) %>%  # specify categorical variable
+    summarize(Frequency = n()) %>% # return counts / frequencies
+    mutate(Percent = paste0(round(Frequency / dims[1] * 100, 2), "%")) # percentages
 
-
+#Plot
+ggplot(results, aes(x = "", y = Frequency, fill = winnerPos)) +
+    geom_col(position = "stack", orientation = "x") + # this plots a stacked bar chart
+     coord_polar(theta = "y") + 
+ theme_void() + # these theme removes the lines around the chart and the grey background
+    geom_text(aes(label = percent(Frequency/dims[1])), position = position_stack(vjust=0.5))+
+  ggtitle("Distribution of Winning Teams Shooting First or Second")+
+  scale_fill_manual(values=c("#DEDEDE", "#029645"))
 ```
 
 Shootout Goals
 ```{r}
-dims = dim(shootouts %>% drop_na(Goal))
+dims = dim(shootouts %>% drop_na(Goal)) #dimensions
 results = shootouts %>% drop_na(Goal) %>% # drop missing values by Goal variable
     group_by(Goal) %>%  # specify categorical variable
     summarize(Frequency = n()) %>% # return counts / frequencies
@@ -103,7 +127,7 @@ ggplot(results, aes(x = "", y = Frequency, fill = OnTarget)) +
 
 
 ```{r}
-data<- merge(x=shootouts, y=zones, by.x="Zone", by.y="Zone.Number")
+data<- merge(x=shootouts, y=zones, by="Zone")
 data<-data[c(2,5,7,10)]
 data$correctlyGuessedSide<- ifelse(data$Keeper==data$Side,"yes","no")
 data <- data[data$correctlyGuessedSide=="yes",]
@@ -174,26 +198,6 @@ ggplot(table, aes(x, y))+
 
 ```{r}
 par(mfrow=c(2,2))
-df<- shootouts[shootouts$Foot=="R",]
-pks_total<- sum(!is.na(df$Zone))
-
-x <- c("col1", "col2","col3")
-y <- c("row3","row3","row3", "row2", "row2", "row2", "row1","row1","row1")
-third_column <- table(df[, 3])
-table <- data.frame(x, y, third_column)
-table$percent<- table$Freq/pks_total
-
-ggplot(table, aes(x, y))+
-  geom_tile(aes(fill = percent))+
-  ggtitle("Right Footer's Heatmap")+
-  scale_fill_gradient(name = "Percentage",
-                      low = "#FFFFFF",
-                      high = "#029645")+
-  theme(axis.text.x=element_blank(), #remove x axis labels
-        axis.ticks.x=element_blank(), #remove x axis ticks
-        axis.text.y=element_blank(),  #remove y axis labels
-        axis.ticks.y=element_blank()  #remove y axis ticks
-        )
 
 df<- shootouts[shootouts$Foot=="L",]
 pks_total<- sum(!is.na(df$Zone))
@@ -215,19 +219,30 @@ ggplot(table, aes(x, y))+
         axis.text.y=element_blank(),  #remove y axis labels
         axis.ticks.y=element_blank()  #remove y axis ticks
         )
+
+df<- shootouts[shootouts$Foot=="R",]
+pks_total<- sum(!is.na(df$Zone))
+
+x <- c("col1", "col2","col3")
+y <- c("row3","row3","row3", "row2", "row2", "row2", "row1","row1","row1")
+third_column <- table(df[, 3])
+table <- data.frame(x, y, third_column)
+table$percent<- table$Freq/pks_total
+
+ggplot(table, aes(x, y))+
+  geom_tile(aes(fill = percent))+
+  ggtitle("Right Footer's Heatmap")+
+  scale_fill_gradient(name = "Percentage",
+                      low = "#FFFFFF",
+                      high = "#029645")+
+  theme(axis.text.x=element_blank(), #remove x axis labels
+        axis.ticks.x=element_blank(), #remove x axis ticks
+        axis.text.y=element_blank(),  #remove y axis labels
+        axis.ticks.y=element_blank()  #remove y axis ticks
+        )
 ```
 ```{r}
-one.way <- aov(Zone ~ Foot, data = shootouts)
 
-summary(one.way)
-
-
-interaction <- aov(Zone ~ Foot*Elimination, data = shootouts)
-
-summary(interaction)
-```
-
-```{r}
 df<- shootouts[shootouts$OnTarget==0,]
 pks_total<- sum(!is.na(df$Zone))
 
@@ -239,7 +254,32 @@ table$percent<- table$Freq/pks_total
 
 ggplot(table, aes(x, y))+
   geom_tile(aes(fill = percent))+
-  ggtitle("Goals Heatmap")+
+  ggtitle("Direction of Shots Not on Target")+
+  scale_fill_gradient(name = "Percentage",
+                      low = "#FFFFFF",
+                      high = "#029645")+
+  theme(axis.text.x=element_blank(), #remove x axis labels
+        axis.ticks.x=element_blank(), #remove x axis ticks
+        axis.text.y=element_blank(),  #remove y axis labels
+        axis.ticks.y=element_blank()  #remove y axis ticks
+        )
+```
+```{r}
+
+df<- shootouts[shootouts$OnTarget==1,]
+df<-df[df$Goal==0,]
+df<-df[df$Foot=="R",]
+pks_total<- sum(!is.na(df$Zone))
+
+x <- c("col1", "col2","col3")
+y <- c("row3","row3","row3", "row2", "row2", "row2", "row1","row1","row1")
+third_column <- table(df[, 3])
+table <- data.frame(x, y, third_column)
+table$percent<- table$Freq/pks_total
+
+ggplot(table, aes(x, y))+
+  geom_tile(aes(fill = percent))+
+  ggtitle("Direction of Shots Blocked by Goalie")+
   scale_fill_gradient(name = "Percentage",
                       low = "#FFFFFF",
                       high = "#029645")+
@@ -251,7 +291,42 @@ ggplot(table, aes(x, y))+
 ```
 
 ```{r}
-shootouts$Zone<- as.character(shootouts$Zone)
+df<- shootouts %>% right_join(kicker, by=c("Game_id","Penalty_Number"))
+df<- shootouts %>% right_join(gk, by=c("Game_id","Team"))
+df<- shootouts %>% right_join(zones, by="Zone")
+df<- drop_na(df)
+
+
+
+model <- glm(Goal ~.,family=binomial(link='logit'),data=df)
+summary(model)
+
+
+
+# Compute the model
+model <- lm(Zone_Description~ Foot, data = df)
+summary(model)$coef
+
+
+
+one.way <- aov(Zone_Description ~ Foot, data = df)
+summary(one.way)
+
+
+one.way <- aov(Elimination ~ Height, data = df)
+summary(one.way)
+
+interaction <- aov(Zone ~ Foot*Age, data = df)
+
+summary(interaction)
+
+interaction <- aov(Zone ~ Foot*Elimination, data = df)
+summary(interaction)
+```
+
+
+
+```{r}
 df<- drop_na(shootouts)
 
 regressor <- randomForest(formula = Zone ~ ., data = df, importance=TRUE) # fit the random forest with default parameter
