@@ -68,6 +68,9 @@ winner<- winner %>%
 winner$winner<- winner$Team
 winner<- as.data.frame(winner[c(1,2,4)])
 
+
+
+
 # Findout Which Team Shot First
 first<- as.data.frame(shootouts[shootouts$Penalty_Number==1,])
 first$first_shooter<- first$Team
@@ -93,6 +96,32 @@ ggplot(results, aes(x = "", y = Frequency, fill = winnerPos)) +
   scale_fill_manual(values=c("#ed1c23","#0660a9"))
 ```
 
+```{r}
+# Find Winner of Each Game
+df<- as.data.frame(shootouts[shootouts$Goal==1,])
+results<- df %>%
+      group_by(Game_id, Team) %>%
+      summarize(Goal = n())
+winner<- results %>%
+        group_by(Game_id) %>%
+        filter(Goal == max(Goal, na.rm=TRUE))
+winner$winner<- winner$Team
+winner<- winner[c(1,3,4)]
+results<- merge(x = results, y = winner, by = "Game_id", all = TRUE)
+
+
+#missed penalties
+df<- as.data.frame(shootouts[shootouts$Goal==0,])
+missed<- df %>%
+      group_by(Game_id, Team) %>%
+      summarize(Missed = n())
+results<- merge(x = results, y = missed, by = c("Game_id","Team"), all = TRUE)
+results[is.na(results)] <- 0
+loser_stats<- results %>% filter(Team != winner)
+loser_stats<- loser_stats[c(1,2,6)]
+#write.csv(loser_stats, "C:\\Users\\Alonso\\Downloads\\loser_stats1.csv", row.names=FALSE)
+
+```
 Shootout Goals
 ```{r}
 dims = dim(shootouts %>% drop_na(Goal)) #dimensions
@@ -372,8 +401,119 @@ ggplot(df, aes(x = Age, fill = Goal)) +
   scale_fill_manual(values=c("#ed1c23","#0660a9"))
 
 ```
+```{r}
+data<- merge(x=shootouts, y=zones, by="Zone")
+data<- data[-c(1,5,6,7,11)]
+data<- merge(x=data, y=kicker, by=c("Game_id","Team", "Penalty_Number" ))
+data<- data[-c(1,2,7,8,9)]
+
+# Define the control using a random forest selection function
+control <- rfeControl(functions = rfFuncs, # random forest
+                      method = "repeatedcv", # repeated cv
+                      repeats = 5, # number of repeats
+                      number = 10) # number of folds
+x <- data[-c(4)]
+
+y <- data$Side
+
+# Training: 80%; Test: 20%
+set.seed(2021)
+inTrain <- createDataPartition(y, p = .80, list = FALSE)[,1]
+
+x_train <- x[ inTrain, ]
+x_test  <- x[-inTrain, ]
+
+y_train <- y[ inTrain]
+y_test  <- y[-inTrain]
 
 
+# Run RFE
+result_rfe1 <- rfe(x = x_train, 
+                   y = y_train, 
+                   sizes = c(1:13),
+                   rfeControl = control)
+
+# Print the results
+result_rfe1
+
+# Print the selected features
+predictors(result_rfe1)
+
+# Print the results visually
+ggplot(data = result_rfe1, metric = "Accuracy") + theme_bw()
+ggplot(data = result_rfe1, metric = "Kappa") + theme_bw()
+predictors(result_rfe1)
+```
+
+
+```{r}
+data<- merge(x=shootouts, y=zones, by="Zone")
+data<- data[-c(1,5,6,7,11)]
+data<- merge(x=data, y=kicker, by=c("Game_id","Team", "Penalty_Number" ))
+data<- data[-c(1,2,7,9)]
+
+# data<- merge(x=shootouts, y=zones, by="Zone")
+# data<- data[c(4,10)]
+
+
+set.seed(101)
+index = createDataPartition(data$Side, p = 0.8, list = F )
+train = data[index,]
+validation = data[-index,]
+
+levels(train$Side) <- make.names(levels(factor(train$Side)))
+levels(validation$Side) <- make.names(levels(factor(validation$Side)))
+
+# Setting up train controls
+repeats = 3
+numbers = 10
+tunel = 10
+
+set.seed(1234)
+defaultW <- getOption("warn")
+options(warn = -1)
+
+x = trainControl(method = "repeatedcv",
+                 number = numbers,
+                 repeats = repeats,
+                 classProbs = TRUE)
+
+model1 <- train(Side~. , data = train, method = "knn",
+               preProcess = c("center","scale"),
+               trControl = x,
+               metric = "ROC",
+               tuneLength = tunel)
+model1
+```
+```{r}
+plot(model1)
+```
+```{r}
+# Validation
+valid_pred <- predict(model1,validation, type = "raw")
+
+#Creating confusion matrix
+confusion_Matrix_results <- confusionMatrix(data=valid_pred, reference = validation$Side)
+
+confusion_Matrix_results
+
+importance <- varImp(model1, scale=FALSE)
+
+plot(importance)
+```
+
+
+```{r}
+control <- rfeControl(functions=rfFuncs, method="cv", number=10)
+# run the RFE algorithm
+results <- rfe(PimaIndiansDiabetes[,1:8], PimaIndiansDiabetes[,9], sizes=c(1:8), rfeControl=control)
+# summarize the results
+print(results)
+# list the chosen features
+predictors(results)
+# plot the results
+plot(results, type=c("g", "o"))
+```
 
 
 ```{r}
